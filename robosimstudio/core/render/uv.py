@@ -21,7 +21,18 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["box_projected_uvs", "planar_uvs"]
+__all__ = ["box_projected_uvs", "deformable_uvs", "planar_uvs"]
+
+
+def deformable_uvs(handle, points: np.ndarray) -> np.ndarray:
+    """Keep authored garment UVs; otherwise project the rest surface in metres."""
+    authored = getattr(handle, "uvs", None)
+    if authored is None:
+        return planar_uvs(points)
+    uv = np.asarray(authored, dtype=np.float32)
+    if uv.shape != (len(points), 2) or not np.isfinite(uv).all():
+        raise ValueError("Deformable UVs must be finite, one pair per local particle")
+    return uv
 
 
 def box_projected_uvs(points: np.ndarray, tris: np.ndarray) -> np.ndarray:

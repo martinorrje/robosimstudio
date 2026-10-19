@@ -257,6 +257,8 @@ class DeformableHandle:
     """For a centerline -- a rope whose particles are its nodes and which owns
     no triangle -- the radius a renderer sweeps a tube of. 0 for anything with a
     surface of its own."""
+    uvs: np.ndarray | None = None
+    """Optional authored per-particle texture coordinates, in local particle order."""
 
 
 @dataclass
@@ -472,6 +474,14 @@ class SceneHandles:
         del background
         lut: dict[int, int] = {}
         for label_id, name in enumerate(self._segmentation_order(), start=1):
+            if name in self.deformables:
+                # Newton 1.6's ray tracer uses one mesh ID and one particle ID
+                # for all deformables. They identify an entity only when it is
+                # the sole deformable; never assign several cloths one name.
+                if len(self.deformables) == 1:
+                    lut[0xFFFFFFFD] = label_id
+                    lut[0xFFFFFFFE] = label_id
+                continue
             handle = self.entity(name) if name in self.objects or name in self.statics else None
             shapes = handle.shapes if handle is not None else self.robot_shapes
             for shape in shapes:
@@ -483,7 +493,7 @@ class SceneHandles:
         return dict(enumerate(self._segmentation_order(), start=1))
 
     def _segmentation_order(self) -> list[str]:
-        return [*sorted(self.statics), *sorted(self.objects), "__robot__"]
+        return [*sorted(self.statics), *sorted(self.objects), "__robot__", *sorted(self.deformables)]
 
     def summary(self) -> str:
         """One line per group, for a build log."""

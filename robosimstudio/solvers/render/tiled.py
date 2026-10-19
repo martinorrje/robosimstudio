@@ -203,7 +203,11 @@ class RendererTiled(RendererBase):
 
         if render_config is None:
             render_config = SensorTiledCamera.RenderConfig(
-                enable_textures=bool(enable_textures), enable_shadows=bool(shadows)
+                enable_textures=bool(enable_textures),
+                enable_shadows=bool(shadows),
+                # Cloth is a two-sided surface, including meshes whose open
+                # boundary does not establish an outward winding.
+                enable_backface_culling=not bool(model.tri_count),
             )
         self.sensor = SensorTiledCamera(model, default_render_config=render_config)
         # Shadows are set on the config rather than left to create_default_light's
@@ -252,12 +256,27 @@ class RendererTiled(RendererBase):
             )
 
         self._label_lut: np.ndarray | None = None
+        self._special_labels: dict[int, int] = {}
         if shape_labels is not None:
             lut = np.zeros(model.shape_count + 1, dtype=np.int32)
             for shape, label in shape_labels.items():
                 if 0 <= int(shape) < model.shape_count:
                     lut[int(shape)] = int(label)
+                elif int(shape) in (0xFFFFFFFD, 0xFFFFFFFE):
+                    self._special_labels[int(shape)] = int(label)
             self._label_lut = lut
+
+    def _label_shape_indices(self, indices: np.ndarray) -> np.ndarray:
+        """Map rigid and reserved deformable IDs without indexing sentinels."""
+        idx = np.asarray(indices, dtype=np.int64)
+        if self._label_lut is None:
+            return np.where(idx == _NO_SHAPE, 0, idx).astype(np.int32)
+        labels = np.zeros(idx.shape, dtype=np.int32)
+        valid = (idx >= 0) & (idx < len(self._label_lut))
+        labels[valid] = self._label_lut[idx[valid]]
+        for shape, label in self._special_labels.items():
+            labels[idx == shape] = label
+        return labels
 
     # ------------------------------------------------------------------ render
     def _write_transforms(self, pass_: dict, body_q: np.ndarray | None) -> None:
@@ -358,12 +377,7 @@ class RendererTiled(RendererBase):
                             np.asarray(depth[slot], dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0
                         )
                     if "seg" in wanted:
-                        idx = np.asarray(shape[slot], dtype=np.int64)
-                        # Misses arrive as the clear value, not a shape; both land on 0.
-                        miss = idx == _NO_SHAPE
-                        idx = np.where(miss, 0, idx)
-                        labels = idx.astype(np.int32) if self._label_lut is None else self._label_lut[idx]
-                        frame["seg"] = np.where(miss, 0, labels).astype(np.int32)
+                        frame["seg"] = self._label_shape_indices(shape[slot])
                     out[world][cam.name] = frame
         return out
 

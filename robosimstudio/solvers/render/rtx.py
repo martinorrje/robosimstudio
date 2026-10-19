@@ -116,7 +116,7 @@ from robosimstudio.core.render.finish import Finish, finish_for, texture_path
 from robosimstudio.core.render.palette import srgb_to_linear
 from robosimstudio.core.render.scenery import box_mesh, get_scenery
 from robosimstudio.core.render.spec import put
-from robosimstudio.core.render.uv import box_projected_uvs, planar_uvs
+from robosimstudio.core.render.uv import box_projected_uvs, deformable_uvs
 from robosimstudio.core.render.visual import TUBE_SIDES, tube_points, tube_triangles
 
 __all__ = ["ENVIRONMENTS", "QUALITY_PASSES", "RendererRTX", "decorate_stage", "usd_film_back"]
@@ -440,7 +440,7 @@ def _viewer_class():
                 idx = wp.array(particles, dtype=wp.int32, device=self.device)
                 tris = wp.array(tris_np.reshape(-1), dtype=wp.int32, device=self.device)
                 out = wp.empty(len(particles), dtype=wp.vec3, device=self.device)
-                uvs = wp.array(planar_uvs(rest[particles]), dtype=wp.vec2, device=self.device)
+                uvs = wp.array(deformable_uvs(handle, rest[particles]), dtype=wp.vec2, device=self.device)
                 cache[name] = (idx, tris, tris_np, out, uvs)
             return cache
 
